@@ -6,6 +6,13 @@
 
 int main()
 {
+	// Create Window
+	// Create Device
+	// Create Swap Chain
+	// Create Pipeline Layout
+	// Create Pipeline
+	// Create Command Buffers
+
 	lve::FirstApp app{};
 
 	try

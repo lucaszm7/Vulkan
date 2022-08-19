@@ -7,6 +7,7 @@ namespace lve
 {
 	FirstApp::FirstApp()
 	{
+		loadModels();
 		createPipelineLayout();
 		createPipeline();
 		createCommandBuffers();
@@ -26,6 +27,44 @@ namespace lve
 		}
 	}
 	
+	void createSierpinskiTriangle(
+		std::vector<LveModel::Vertex>& vertices, 
+		int depth,
+		glm::vec2 left,
+		glm::vec2 right,
+		glm::vec2 top) 
+	{
+		if (depth <= 0) 
+		{
+			vertices.push_back({ top });
+			vertices.push_back({ right });
+			vertices.push_back({ left });
+		}
+		else
+		{
+			// New Left
+			auto leftTop = 0.5f * (left + top);
+			// New Right
+			auto rightTop = 0.5f * (right + top);
+			// New Bottom
+			auto leftRight = 0.5f * (left + right);
+
+			createSierpinskiTriangle(vertices, depth - 1, left, leftRight, leftTop);
+			createSierpinskiTriangle(vertices, depth - 1, leftRight, right, rightTop);
+			createSierpinskiTriangle(vertices, depth - 1, leftTop, rightTop, top);
+		}
+	}
+
+	void FirstApp::loadModels()
+	{
+		std::vector<LveModel::Vertex> vertices{};
+
+		createSierpinskiTriangle(vertices, 10, { -1.0f, 1.0f }, { 1.0f, 1.0f }, { 0.0f, -1.0f });
+
+		lveModel = std::make_unique<LveModel>(lveDevice, vertices);
+		
+	}
+
 	void FirstApp::createPipelineLayout()
 	{
 		VkPipelineLayoutCreateInfo pipelinelayoutInfo{};
@@ -88,9 +127,13 @@ namespace lve
 			renderPassInfo.pClearValues = clearValues.data();
 
 			vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+			
 			lvePipeline->bind(commandBuffers[i]);
-			vkCmdDraw(commandBuffers[i], 3, 1, 0, 0);
+			lveModel->bind(commandBuffers[i]);
+			lveModel->draw(commandBuffers[i]);
+			
 			vkCmdEndRenderPass(commandBuffers[i]);
+			
 			if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS)
 				throw std::runtime_error("Failed to record command buffer");
 		}
