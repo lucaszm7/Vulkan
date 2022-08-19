@@ -26,41 +26,31 @@ namespace lve
 			drawFrame();
 		}
 	}
-	
-	void createSierpinskiTriangle(
-		std::vector<LveModel::Vertex>& vertices, 
-		int depth,
-		glm::vec2 left,
-		glm::vec2 right,
-		glm::vec2 top) 
-	{
-		if (depth <= 0) 
-		{
-			vertices.push_back({ top });
-			vertices.push_back({ right });
-			vertices.push_back({ left });
-		}
-		else
-		{
-			// New Left
-			auto leftTop = 0.5f * (left + top);
-			// New Right
-			auto rightTop = 0.5f * (right + top);
-			// New Bottom
-			auto leftRight = 0.5f * (left + right);
 
-			createSierpinskiTriangle(vertices, depth - 1, left, leftRight, leftTop);
-			createSierpinskiTriangle(vertices, depth - 1, leftRight, right, rightTop);
-			createSierpinskiTriangle(vertices, depth - 1, leftTop, rightTop, top);
-		}
+	void createInverseSierpinskiTriangle(
+		std::vector<LveModel::Vertex>& vertices,
+		int depth,
+		glm::vec2 left, glm::vec2 right, glm::vec2 top)
+	{
+		if (depth <= 0) return;
+
+		auto nLeft = 0.5f * (left + top);
+		auto nRight = 0.5f * (right + top);
+		auto nBottom = 0.5f * (left + right);
+
+		vertices.push_back({ nLeft });
+		vertices.push_back({ nRight });
+		vertices.push_back({ nBottom });
+
+		createInverseSierpinskiTriangle(vertices, depth - 1, left, nBottom, nLeft);
+		createInverseSierpinskiTriangle(vertices, depth - 1, nBottom, right, nRight);
+		createInverseSierpinskiTriangle(vertices, depth - 1, nLeft, nRight, top);
 	}
 
 	void FirstApp::loadModels()
 	{
-		std::vector<LveModel::Vertex> vertices{};
-
-		createSierpinskiTriangle(vertices, 10, { -1.0f, 1.0f }, { 1.0f, 1.0f }, { 0.0f, -1.0f });
-
+		std::vector<LveModel::Vertex> vertices;
+		createInverseSierpinskiTriangle(vertices, 10, { -1.0f, 1.0f }, { 1.0f, 1.0f }, { 0.0f, -1.0f });
 		lveModel = std::make_unique<LveModel>(lveDevice, vertices);
 		
 	}
