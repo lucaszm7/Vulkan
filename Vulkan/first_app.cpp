@@ -1,10 +1,28 @@
 #include "first_app.hpp"
 
-#include <stdexcept>
+// libs
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#include <glm/glm.hpp>
+
+// std
 #include <array>
+#include <stdexcept>
+
+#include <chrono>
 
 namespace lve
 {
+	// Push Constants is a easy and performatic way to delivery data to vertex and fragment shader
+	// but its limited in size (only 128 bytes is guaranteed)
+	// and is limited per model, so we cannot combine model in a single vertex buffer
+	// when using push contants
+	struct SimplePushConstantData
+	{
+		glm::vec2 offset;
+		alignas(16) glm::vec3 color;
+	};
+
 	FirstApp::FirstApp()
 	{
 		loadModels();
@@ -20,10 +38,14 @@ namespace lve
 	
 	void FirstApp::run()
 	{
+		std::cout << "Max Push Constants Size: " << lveDevice.properties.limits.maxPushConstantsSize << "\n";
 		while (!lveWindow.shouldClose())
 		{
+			// auto start = std::chrono::high_resolution_clock::now();
 			glfwPollEvents();
 			drawFrame();
+			// std::chrono::duration<double> duration = std::chrono::high_resolution_clock::now() - start;
+			// std::cout << "Took: " << duration.count() * 1000.0 << "ms - FPS: " << 1 / (duration.count()) << "\n";
 		}
 	}
 
@@ -50,19 +72,28 @@ namespace lve
 	void FirstApp::loadModels()
 	{
 		std::vector<LveModel::Vertex> vertices;
-		createInverseSierpinskiTriangle(vertices, 10, { -1.0f, 1.0f }, { 1.0f, 1.0f }, { 0.0f, -1.0f });
+		// createInverseSierpinskiTriangle(vertices, 10, { -1.0f, 1.0f }, { 1.0f, 1.0f }, { 0.0f, -1.0f });
+		vertices.push_back({ { -0.5f,  0.5f }  , { 1.0f, 0.0f, 0.0f } });
+		vertices.push_back({ {  0.5f,  0.5f }  , { 0.0f, 1.0f, 0.0f } });
+		vertices.push_back({ {  0.0f, -0.5f }  , { 0.0f, 0.0f, 1.0f } });
 		lveModel = std::make_unique<LveModel>(lveDevice, vertices);
 		
 	}
 
 	void FirstApp::createPipelineLayout()
 	{
+
+		VkPushConstantRange pushConstantRange{};
+		pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+		pushConstantRange.offset = 0;
+		pushConstantRange.size = sizeof(SimplePushConstantData);
+
 		VkPipelineLayoutCreateInfo pipelinelayoutInfo{};
 		pipelinelayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 		pipelinelayoutInfo.setLayoutCount = 0;
 		pipelinelayoutInfo.pSetLayouts = nullptr;
-		pipelinelayoutInfo.pushConstantRangeCount = 0;
-		pipelinelayoutInfo.pPushConstantRanges = nullptr;
+		pipelinelayoutInfo.pushConstantRangeCount = 1;
+		pipelinelayoutInfo.pPushConstantRanges = &pushConstantRange;
 
 		if (vkCreatePipelineLayout(lveDevice.device(), &pipelinelayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
 			throw std::runtime_error("Failed creating pipeline layout");
@@ -136,6 +167,9 @@ namespace lve
 	
 	void FirstApp::recordCommandBuffer(int imageIndex)
 	{
+		static int frame = 0;
+		frame = (frame + 1) % 1000;
+
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
@@ -150,7 +184,7 @@ namespace lve
 		renderPassInfo.renderArea.extent = lveSwapChain->getSwapChainExtent();
 
 		std::array<VkClearValue, 2> clearValues{};
-		clearValues[0].color = { 0.1f,0.1f,0.1f,1.0f };
+		clearValues[0].color = { 0.01f,0.01f,0.01f,1.0f };
 		clearValues[1].depthStencil = { 1.0f, 0 };
 
 		renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
@@ -172,7 +206,18 @@ namespace lve
 
 		lvePipeline->bind(commandBuffers[imageIndex]);
 		lveModel->bind(commandBuffers[imageIndex]);
-		lveModel->draw(commandBuffers[imageIndex]);
+
+		for (int j = 0; j < 4; ++j)
+		{
+			SimplePushConstantData push;
+			push.offset = { -0.5f + frame * 0.002f * (j + 1), -0.4f + j * 0.25f};
+			push.color =  {  0.0f + frame * 0.001f,  0.0f + frame * 0.01f, 0.2f + 0.2f * j * frame };
+
+			vkCmdPushConstants(commandBuffers[imageIndex], pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SimplePushConstantData), &push);
+			
+			lveModel->draw(commandBuffers[imageIndex]);
+		}
+
 
 		vkCmdEndRenderPass(commandBuffers[imageIndex]);
 
